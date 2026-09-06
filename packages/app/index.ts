@@ -1,12 +1,20 @@
 import { confirm } from '@inquirer/prompts'
 import { type InsertTransaction, LunchMoneyError, type User } from '@lunch-money/lunch-money-js-v2'
-import { details, error, info } from '@repo/logger'
+import { details, error, info, warn } from '@repo/logger'
 
 import { syncMoneyForwardAccounts, syncRevolutAccounts } from './accounts.ts'
+import { parseCliArgs, printHelp } from './cli.ts'
 import { loadTransactions as loadMoneyForwardTransactions } from './money-forward/importer.ts'
 import { loadTransactions as loadRevolutTransactions, RevolutTransactionState } from './revolut/importer.ts'
 import { scrape } from './scraper.ts'
 import { lm, setup } from './setup.ts'
+
+const cliOptions = parseCliArgs()
+
+if (cliOptions.help) {
+    printHelp()
+    process.exit(0)
+}
 
 setup()
 
@@ -52,18 +60,29 @@ async function insertTransactionsBatch(
 }
 
 async function processMoneyForward() {
-    const scrapeMoneyForward = await confirm({
-        message: 'Scrape updates from Money Forward?',
-        default: false,
-    })
-    if (scrapeMoneyForward) {
-        info(`Scraping from Money Forward...`)
-        await scrape()
+    let shouldScrape: boolean
+    if (cliOptions.scrape !== undefined) {
+        shouldScrape = cliOptions.scrape
+    } else {
+        shouldScrape = await confirm({
+            message: 'Scrape updates from Money Forward?',
+            default: false,
+        })
+    }
+
+    if (shouldScrape) {
+        info(`Scraping from Money Forward (headless: %s)...`, details(cliOptions.headless))
+        await scrape({ headless: cliOptions.headless })
     }
 
     info(`Syncing Money Forward accounts`)
     const mfNameToLmId: Map<string, number> = new Map(
-        (await syncMoneyForwardAccounts()).map((it) => [it.account_name, it.lm_id])
+        (
+            await syncMoneyForwardAccounts({
+                nonInteractive: cliOptions.nonInteractive,
+                rematch: cliOptions.rematch,
+            })
+        ).map((it) => [it.account_name, it.lm_id])
     )
 
     info(`Loading transactions from CSV files...`)
@@ -73,16 +92,34 @@ async function processMoneyForward() {
     try {
         info(`Inserting transactions into Lunch Money...`)
 
-        const lmTransactions = mfTransactions
-            .map((t) => ({
-                manual_account_id: mfNameToLmId.get(t.institution),
+        const lmTransactions: InsertTransaction[] = []
+        let unmappedCount = 0
+        const unmappedInstitutions = new Set<string>()
+
+        for (const t of mfTransactions) {
+            const manualAccountId = mfNameToLmId.get(t.institution)
+            if (manualAccountId === undefined) {
+                unmappedCount++
+                unmappedInstitutions.add(t.institution)
+                continue
+            }
+            lmTransactions.push({
+                manual_account_id: manualAccountId,
                 date: t.date.replace(/\//g, '-'),
                 amount: -t.amount,
                 payee: t.description.slice(0, 140),
                 notes: t.description,
                 external_id: t.id,
-            }))
-            .filter((manual_account_id) => manual_account_id !== undefined)
+            })
+        }
+
+        if (unmappedCount > 0) {
+            warn(
+                'Skipped %s transactions for unmapped Money Forward institutions: %s',
+                details(unmappedCount),
+                details([...unmappedInstitutions].join(', '))
+            )
+        }
 
         const { inserted, skipped } = await insertTransactionsBatch(lmTransactions)
 
@@ -109,22 +146,45 @@ async function processRevolut() {
     info(`Syncing Revolut accounts`)
     const accounts = [...new Set(unfilteredRevolutTransactions.map((it) => it.currency))]
     const revolutNameToLmId: Map<string, number> = new Map(
-        (await syncRevolutAccounts(accounts)).map((it) => [it.account_name, it.lm_id])
+        (
+            await syncRevolutAccounts(accounts, {
+                nonInteractive: cliOptions.nonInteractive,
+                rematch: cliOptions.rematch,
+            })
+        ).map((it) => [it.account_name, it.lm_id])
     )
 
     try {
         info(`Inserting transactions into Lunch Money...`)
 
-        const lmTransactions = revolutTransactions
-            .map((t) => ({
-                manual_account_id: revolutNameToLmId.get(t.currency),
+        const lmTransactions: InsertTransaction[] = []
+        let unmappedCount = 0
+        const unmappedCurrencies = new Set<string>()
+
+        for (const t of revolutTransactions) {
+            const manualAccountId = revolutNameToLmId.get(t.currency)
+            if (manualAccountId === undefined) {
+                unmappedCount++
+                unmappedCurrencies.add(t.currency)
+                continue
+            }
+            lmTransactions.push({
+                manual_account_id: manualAccountId,
                 date: t.startedDate.substring(0, 10),
                 amount: -t.amount - t.fee,
                 payee: t.description.slice(0, 140),
                 notes: t.description,
                 external_id: t.externalId,
-            }))
-            .filter((manual_account_id) => manual_account_id !== undefined)
+            })
+        }
+
+        if (unmappedCount > 0) {
+            warn(
+                'Skipped %s transactions for unmapped Revolut currencies: %s',
+                details(unmappedCount),
+                details([...unmappedCurrencies].join(', '))
+            )
+        }
 
         const { inserted, skipped } = await insertTransactionsBatch(lmTransactions)
 

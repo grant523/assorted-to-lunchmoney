@@ -56,14 +56,50 @@ packages/app/data/
 
 ## Usage
 
-Run the importer:
+### Interactive Mode
+
+Run the importer interactively:
 
 ```bash
 bun start
 ```
 
+### Daily Background Job / Non-Interactive Mode
+
+Run unattended (e.g. from `cron` or `launchd`):
+
+```bash
+bun start -- -y
+# or
+bun start -- --non-interactive
+# or set NON_INTERACTIVE=true in packages/app/.env
+```
+
+When running non-interactively (or in non-TTY environments):
+- Money Forward updates are scraped automatically
+- Browser scraper runs headless by default
+- Existing account mappings in SQLite are used without prompting
+- Transactions for any unmapped accounts are safely skipped with a warning
+
+### CLI Options
+
+Pass options after `--`:
+
+```bash
+bun start -- [options]
+```
+
+| Option | Description |
+|---|---|
+| `-y`, `--non-interactive` | Run unattended without interactive prompts |
+| `--interactive` | Force interactive prompts even in non-TTY environments |
+| `--scrape` / `--no-scrape` | Explicitly enable or disable Money Forward scraping |
+| `--headless` / `--no-headless` | Control headless browser scraping (defaults to `true`) |
+| `--rematch` | Force rematching of Lunch Money accounts |
+| `-h`, `--help` | Show help message |
+
 The tool will:
-1. Prompt to scrape Money Forward
+1. Scrape updates from Money Forward (headless)
 2. Sync accounts from Money Forward and Revolut to Lunch Money
 3. Load transactions from CSV files
 4. Import transactions in batches of 500

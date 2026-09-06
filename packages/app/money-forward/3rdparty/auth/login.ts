@@ -4,6 +4,7 @@ import { info } from '@repo/logger'
 import type { BrowserContext, Page } from 'playwright'
 
 import { config } from '../../../setup.ts'
+import { GROUP_SELECTOR } from '../scrapers/group.ts'
 import { mfUrls } from '../urls.ts'
 import { getOTP } from './otp.ts'
 import { hasAuthState, saveAuthState } from './state.ts'
@@ -92,10 +93,15 @@ async function isSessionValid(page: Page): Promise<boolean> {
         const currentUrl = page.url()
         info('Current URL after navigation:', currentUrl)
 
-        // If we're on the main site (not login/id page), session is valid
+        // The URL alone isn't reliable: moneyforward.com/ serves the public
+        // marketing page at the same URL when logged out (no redirect to
+        // /sign_in), so also confirm a dashboard-only element is present.
         if (isLoggedInUrl(currentUrl)) {
-            info('Session is valid!')
-            return true
+            const isDashboard = await page.locator(GROUP_SELECTOR).count()
+            if (isDashboard) {
+                info('Session is valid!')
+                return true
+            }
         }
 
         info('Session is invalid, need to login')

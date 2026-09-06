@@ -8,9 +8,9 @@ import { scrapeCashFlowHistory } from './money-forward/3rdparty/scrapers/cash-fl
 import { NO_GROUP_ID, switchGroup } from './money-forward/3rdparty/scrapers/group.ts'
 import { getRegisteredAccounts } from './money-forward/3rdparty/scrapers/registered-accounts.ts'
 
-export async function scrape() {
+export async function scrape({ headless = true }: { headless?: boolean } = {}) {
     const browser = await chromium.launch({
-        headless: false,
+        headless,
     })
 
     const context = await createBrowserContext(browser, { useAuthState: true })

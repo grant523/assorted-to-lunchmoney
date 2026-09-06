@@ -1,6 +1,6 @@
 import { confirm, input, Separator, select } from '@inquirer/prompts'
 import { type CreateManualAccountBody, LunchMoneyError, type ManualAccount } from '@lunch-money/lunch-money-js-v2'
-import { details, error, info } from '@repo/logger'
+import { details, error, info, warn } from '@repo/logger'
 import { parse } from 'csv-parse/sync'
 import { stringify } from 'csv-stringify/sync'
 
@@ -8,6 +8,11 @@ import type { AccountStatus } from './money-forward/3rdparty/scrapers/registered
 import { mfUrls } from './money-forward/3rdparty/urls.ts'
 import { db, lm } from './setup.ts'
 import type { Account } from './types.ts'
+
+export interface SyncAccountsOptions {
+    nonInteractive?: boolean
+    rematch?: boolean
+}
 
 const MONEY_FORWARD_INTEGRATION = 'money-forward'
 const REVOLUT_INTEGRATION = 'revolut'
@@ -69,7 +74,8 @@ export async function loadAccounts(): Promise<AccountStatus[]> {
     }
 }
 
-export async function syncMoneyForwardAccounts() {
+export async function syncMoneyForwardAccounts(options: SyncAccountsOptions = {}) {
+    const { nonInteractive = false, rematch: forceRematch = false } = options
     const mfAccounts = await loadAccounts()
     const lmAccounts: ManualAccount[] = await lm.manualAccounts.getAll()
 
@@ -108,19 +114,25 @@ export async function syncMoneyForwardAccounts() {
     })
 
     if (unmatchedMfAccounts.size > 0) {
-        info('Unmapped Money Forward accounts:')
+        warn('Unmapped Money Forward accounts (transactions will be skipped):')
         unmatchedMfAccounts.values().forEach((it) => {
             const mfAccountName = it.name
-            info(`↳ ${details(mfAccountName)}`)
+            warn(`↳ ${details(mfAccountName)}`)
         })
     }
 
-    let rematch = true
-    if (matches.length > 0) {
+    let rematch = false
+    if (forceRematch) {
+        rematch = true
+    } else if (nonInteractive) {
+        rematch = false
+    } else if (matches.length > 0) {
         rematch = await confirm({
             message: 'There are existing matches from a previous import. Do you want to rematch your accounts?',
             default: false,
         })
+    } else if (mfAccounts.length > 0) {
+        rematch = true
     }
 
     if (rematch) {
@@ -202,18 +214,36 @@ export async function syncMoneyForwardAccounts() {
     return matches
 }
 
-export async function syncRevolutAccounts(revolutAccounts: string[]) {
+export async function syncRevolutAccounts(revolutAccounts: string[], options: SyncAccountsOptions = {}) {
+    const { nonInteractive = false, rematch: forceRematch = false } = options
     const lmAccounts = await lm.manualAccounts.getAll()
 
     const remainingLMAccounts = new Set(lmAccounts)
 
-    let matches = db.query(`SELECT * FROM accounts WHERE integration = ?`).all(REVOLUT_INTEGRATION)
-    let rematch = true
-    if (matches.length > 0) {
+    let matches = db.query(`SELECT * FROM accounts WHERE integration = ?`).all(REVOLUT_INTEGRATION) as Account[]
+
+    const matchedAccountIds = new Set(matches.map((it) => it.account_id))
+    const unmatchedRevolutAccounts = revolutAccounts.filter((acc) => !matchedAccountIds.has(acc))
+
+    if (unmatchedRevolutAccounts.length > 0) {
+        warn('Unmapped Revolut accounts (transactions will be skipped):')
+        unmatchedRevolutAccounts.forEach((acc) => {
+            warn(`↳ ${details(acc)}`)
+        })
+    }
+
+    let rematch = false
+    if (forceRematch) {
+        rematch = true
+    } else if (nonInteractive) {
+        rematch = false
+    } else if (matches.length > 0) {
         rematch = await confirm({
             message: 'There are existing matches from a previous import. Do you want to rematch your accounts?',
             default: false,
         })
+    } else if (revolutAccounts.length > 0) {
+        rematch = true
     }
 
     if (rematch) {
@@ -291,6 +321,6 @@ export async function syncRevolutAccounts(revolutAccounts: string[]) {
         }
     }
 
-    matches = db.query('SELECT * FROM accounts WHERE integration = ?').all(REVOLUT_INTEGRATION)
-    return matches as Account[]
+    matches = db.query('SELECT * FROM accounts WHERE integration = ?').all(REVOLUT_INTEGRATION) as Account[]
+    return matches
 }

@@ -12,7 +12,7 @@ export const NO_GROUP_ID = '0'
 /** 除外すべきオプションのID（グループの追加・編集など） */
 const EXCLUDED_OPTION_IDS = ['create_group']
 
-const GROUP_SELECTOR = 'select[name="group_id_hash"]'
+export const GROUP_SELECTOR = 'select[name="group_id_hash"]'
 
 /** グループ選択なしかどうかを判定 */
 export function isNoGroup(groupId: string): boolean {

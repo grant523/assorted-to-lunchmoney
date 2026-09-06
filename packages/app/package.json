@@ -20,6 +20,6 @@
         "csv-stringify": "^6.6.0",
         "iconv-lite": "^0.7.2",
         "otpauth": "^9.5.0",
-        "playwright": "^1.58.2"
+        "playwright": "^1.62.1"
     }
 }
