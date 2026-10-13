@@ -97,6 +97,15 @@ async function processMoneyForward() {
         const unmappedInstitutions = new Set<string>()
 
         const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\uFF65-\uFF9F]/
+        const CARD_PREFIX_REGEX =
+            /^(?:JCB|VISA|MasterCard|MASTER|AMEX|American Express)?\s*(?:国内利用|海外利用)\s*(?:JCB|VISA|MasterCard|MASTER|AMEX)?\s*/i
+
+        function cleanMerchantName(raw: string): string {
+            if (!raw) return ''
+            const normalized = raw.replace(/\u3000/g, ' ').trim()
+            const cleaned = normalized.replace(CARD_PREFIX_REGEX, '').trim()
+            return cleaned || normalized
+        }
 
         const translationCache = new Map<string, string>()
 
@@ -162,7 +171,8 @@ async function processMoneyForward() {
                 unmappedInstitutions.add(t.institution)
                 continue
             }
-            const translatedPayee = await translateText(t.description)
+            const cleanedPayee = cleanMerchantName(t.description)
+            const translatedPayee = await translateText(cleanedPayee)
             lmTransactions.push({
                 manual_account_id: manualAccountId,
                 date: t.date.replace(/\//g, '-'),
