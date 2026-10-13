@@ -97,13 +97,12 @@ async function processMoneyForward() {
         const unmappedInstitutions = new Set<string>()
 
         const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\uFF65-\uFF9F]/
-        const CARD_PREFIX_REGEX =
-            /^(?:JCB|VISA|MasterCard|MASTER|AMEX|American Express)?\s*(?:国内利用|海外利用)\s*(?:JCB|VISA|MasterCard|MASTER|AMEX)?\s*/i
+        const RAKUTEN_JCB_PREFIX_REGEX = /^JCB(?:国内利用\s*(?:JCB)?|海外利用)\s*/
 
         function cleanMerchantName(raw: string): string {
             if (!raw) return ''
             const normalized = raw.replace(/\u3000/g, ' ').trim()
-            const cleaned = normalized.replace(CARD_PREFIX_REGEX, '').trim()
+            const cleaned = normalized.replace(RAKUTEN_JCB_PREFIX_REGEX, '').trim()
             return cleaned || normalized
         }
 
