@@ -11,6 +11,7 @@ import { getRegisteredAccounts } from './money-forward/3rdparty/scrapers/registe
 export async function scrape({ headless = true }: { headless?: boolean } = {}) {
     const browser = await chromium.launch({
         headless,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     })
 
     const context = await createBrowserContext(browser, { useAuthState: true })

@@ -1,0 +1,15 @@
+services:
+  importer:
+    build: .
+    image: assorted-to-lunchmoney:latest
+    container_name: lunchmoney-importer
+    environment:
+      - NON_INTERACTIVE=true
+      - HEADLESS=true
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    shm_size: '1gb'
+    volumes:
+      - ./packages/app/.env:/app/packages/app/.env:ro
+      - ./packages/app/mflm.sqlite:/app/packages/app/mflm.sqlite
+      - ./packages/app/data:/app/packages/app/data
+

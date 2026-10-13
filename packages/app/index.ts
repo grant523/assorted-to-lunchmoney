@@ -7,7 +7,7 @@ import { parseCliArgs, printHelp } from './cli.ts'
 import { loadTransactions as loadMoneyForwardTransactions } from './money-forward/importer.ts'
 import { loadTransactions as loadRevolutTransactions, RevolutTransactionState } from './revolut/importer.ts'
 import { scrape } from './scraper.ts'
-import { lm, setup } from './setup.ts'
+import { db, lm, setup } from './setup.ts'
 
 const cliOptions = parseCliArgs()
 
@@ -96,6 +96,65 @@ async function processMoneyForward() {
         let unmappedCount = 0
         const unmappedInstitutions = new Set<string>()
 
+        const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\uFF65-\uFF9F]/
+
+        const translationCache = new Map<string, string>()
+
+        async function translateText(text: string): Promise<string> {
+            const trimmed = text.trim()
+            if (!trimmed || !JAPANESE_CHAR_REGEX.test(trimmed)) {
+                return trimmed
+            }
+
+            const cachedInMem = translationCache.get(trimmed)
+            if (cachedInMem) {
+                return cachedInMem
+            }
+
+            try {
+                const cached = db
+                    .query<{ translated: string }, [string]>('SELECT translated FROM translations WHERE original = ?')
+                    .get(trimmed)
+                if (cached?.translated) {
+                    translationCache.set(trimmed, cached.translated)
+                    return cached.translated
+                }
+            } catch {
+                // Fall back to API if DB query fails
+            }
+
+            try {
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(trimmed)}`
+                const res = await fetch(url)
+                if (res.ok) {
+                    const data = (await res.json()) as unknown
+                    if (Array.isArray(data) && Array.isArray(data[0])) {
+                        const translated = data[0]
+                            .map((item: unknown) => (Array.isArray(item) ? item[0] : ''))
+                            .filter(Boolean)
+                            .join('')
+                            .trim()
+                        if (translated) {
+                            translationCache.set(trimmed, translated)
+                            try {
+                                db.query(
+                                    'INSERT OR REPLACE INTO translations (original, translated, created_at) VALUES (?, ?, ?)'
+                                ).run(trimmed, translated, new Date().toISOString())
+                            } catch {
+                                // Ignore DB write error
+                            }
+                            return translated
+                        }
+                    }
+                }
+            } catch {
+                // Fall back to original text on network or parsing failure
+            }
+
+            translationCache.set(trimmed, trimmed)
+            return trimmed
+        }
+
         for (const t of mfTransactions) {
             const manualAccountId = mfNameToLmId.get(t.institution)
             if (manualAccountId === undefined) {
@@ -103,12 +162,14 @@ async function processMoneyForward() {
                 unmappedInstitutions.add(t.institution)
                 continue
             }
+            const translatedPayee = await translateText(t.description)
             lmTransactions.push({
                 manual_account_id: manualAccountId,
                 date: t.date.replace(/\//g, '-'),
                 amount: -t.amount,
-                payee: t.description.slice(0, 140),
-                notes: t.description,
+                payee: translatedPayee.slice(0, 140),
+                original_name: t.description,
+                notes: t.memo || undefined,
                 external_id: t.id,
             })
         }
@@ -173,7 +234,6 @@ async function processRevolut() {
                 date: t.startedDate.substring(0, 10),
                 amount: -t.amount - t.fee,
                 payee: t.description.slice(0, 140),
-                notes: t.description,
                 external_id: t.externalId,
             })
         }

@@ -39,6 +39,10 @@ export const setup = () => {
         ).run()
     }
 
+    db.query(
+        'CREATE TABLE IF NOT EXISTS translations (original TEXT PRIMARY KEY, translated TEXT, created_at TEXT)'
+    ).run()
+
     lm = new LunchMoneyClient({
         apiKey: config.lunchMoney.apiKey,
         baseUrl: 'https://api.lunchmoney.dev/v2', // Optional

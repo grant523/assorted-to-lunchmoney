@@ -13,9 +13,9 @@
         "typescript": "^5"
     },
     "dependencies": {
-        "@repo/logger": "*",
         "@inquirer/prompts": "^8.2.0",
         "@lunch-money/lunch-money-js-v2": "^2.8.5",
+        "@repo/logger": "*",
         "csv-parse": "^6.1.0",
         "csv-stringify": "^6.6.0",
         "iconv-lite": "^0.7.2",

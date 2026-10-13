@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+
 import { parseCliArgs } from './cli.ts'
 
 describe('parseCliArgs', () => {
@@ -76,4 +77,3 @@ describe('parseCliArgs', () => {
         expect(parseCliArgs(['--help'], {}, true).help).toBe(true)
     })
 })
-

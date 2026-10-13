@@ -106,6 +106,39 @@ The tool will:
 5. Skip duplicates based on external_id
 6. Apply Lunch Money rules automatically
 
+## Running with Docker (Synology NAS)
+
+Running via Docker / Container Manager avoids installing Bun and Playwright browser dependencies directly on the Synology host OS.
+
+### 1. Initial Setup on Synology
+1. Copy this repository to your Synology (e.g. `/volume1/docker/assorted-to-lunchmoney/`).
+2. Make sure your `.env` file is present in `packages/app/.env`.
+3. Build the Docker image:
+   ```bash
+   cd /volume1/docker/assorted-to-lunchmoney
+   docker compose build
+   ```
+
+### 2. Manual Test Run
+Test that the importer runs non-interactively and exits when finished:
+```bash
+docker compose run --rm importer
+```
+
+### 3. Schedule Daily Run in Synology Task Scheduler
+1. Open DSM **Control Panel → Task Scheduler**.
+2. Click **Create → Scheduled Task → User-defined script**.
+3. **General**:
+   - Task: `Lunch Money Daily Importer`
+   - User: `root`
+4. **Schedule**:
+   - Daily (e.g. at `06:00 AM`).
+5. **Task Settings** (User-defined script):
+   ```bash
+   cd /volume1/docker/assorted-to-lunchmoney && /usr/local/bin/docker compose run --rm importer >> /volume1/docker/assorted-to-lunchmoney/cron.log 2>&1
+   ```
+6. Click **OK**.
+
 ## Project Structure
 
 ```
