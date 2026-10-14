@@ -1,4 +1,5 @@
 // biome-ignore-all lint/style/noNonNullAssertion: 3rd party code
+// biome-ignore-all lint/suspicious/noExplicitAny: 3rd party code
 
 import { info } from '@repo/logger'
 import type { Page } from 'playwright'
@@ -21,6 +22,46 @@ export interface AccountStatus {
 }
 
 export async function getRegisteredAccounts(page: Page): Promise<RegisteredAccounts> {
+    info('Getting registered accounts balances...')
+
+    const homeBalances = new Map<string, number>()
+    try {
+        if (!page.url().includes('moneyforward.com') || page.url().includes('/accounts')) {
+            await page.goto(mfUrls.home, { waitUntil: 'domcontentloaded' })
+        }
+        await page
+            .locator('#registered-accounts, #registered-manual-accounts')
+            .first()
+            .waitFor({ state: 'visible', timeout: 5000 })
+            .catch(() => {})
+
+        const homeItems = await page.evaluate(() => {
+            const doc = (globalThis as unknown as { document: any }).document
+            const list = Array.from(
+                doc.querySelectorAll('#registered-accounts li.account, #registered-manual-accounts li.account') as any[]
+            )
+            return list.map((el: any) => {
+                const link = el.querySelector('a[href*="/accounts/show"]')
+                const url = link?.getAttribute('href') || ''
+                const mfIdMatch = url.match(/\/accounts\/show(?:\/show_manual)?\/([^/?]+)/)
+                const name = link?.textContent?.trim() || ''
+                const amountText = el.querySelector('.number')?.textContent?.trim() || ''
+                return { mfId: mfIdMatch ? mfIdMatch[1] : '', name, amountText }
+            })
+        })
+
+        for (const item of homeItems) {
+            const clean = item.amountText.replace(/[,円\s]/g, '')
+            const val = parseInt(clean, 10)
+            if (!Number.isNaN(val)) {
+                if (item.mfId) homeBalances.set(item.mfId, val)
+                if (item.name) homeBalances.set(item.name, val)
+            }
+        }
+    } catch (e) {
+        info(`Note: Could not extract balances from home page: ${e}`)
+    }
+
     info('Getting registered accounts from /accounts page...')
 
     await page.goto(mfUrls.accounts, {
@@ -55,9 +96,7 @@ export async function getRegisteredAccounts(page: Page): Promise<RegisteredAccou
                 const assetsText = await cells
                     .nth(1)
                     .textContent({ timeout: 1000 })
-                    .catch(() => '0')
-                const cleanAssets = (assetsText || '0').replace(/[,円\s]/g, '')
-                const balance = parseInt(cleanAssets, 10) || 0
+                    .catch(() => '')
                 const dateText = await cells
                     .nth(2)
                     .textContent({ timeout: 1000 })
@@ -122,6 +161,18 @@ export async function getRegisteredAccounts(page: Page): Promise<RegisteredAccou
                     // Extract mfId from URL (e.g., "/accounts/show/xxx", "/accounts/show_manual/xxx", "/accounts/edit/xxx")
                     const mfIdMatch = url?.match(/\/accounts\/(?:show(?:_manual)?|edit)\/([^/?]+)/)
                     const mfId = mfIdMatch ? mfIdMatch[1]! : `manual-${name}`
+
+                    const cleanAssets = (assetsText || '').replace(/[,円\s]/g, '')
+                    let balance = cleanAssets ? parseInt(cleanAssets, 10) : undefined
+                    if (balance === undefined || Number.isNaN(balance)) {
+                        if (mfId && homeBalances.has(mfId)) {
+                            balance = homeBalances.get(mfId)
+                        } else if (name && homeBalances.has(name)) {
+                            balance = homeBalances.get(name)
+                        } else {
+                            balance = 0
+                        }
+                    }
 
                     accounts.push({
                         mfId,
