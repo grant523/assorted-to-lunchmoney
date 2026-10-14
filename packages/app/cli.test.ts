@@ -81,6 +81,15 @@ describe('parseCliArgs', () => {
         expect(parseCliArgs([], { REFRESH: 'true' }, true).refresh).toBe(true)
     })
 
+    test('revolut is false by default and can be overridden with --revolut or REVOLUT=true', () => {
+        expect(parseCliArgs([], {}, true).revolut).toBe(false)
+        expect(parseCliArgs(['--revolut'], {}, true).revolut).toBe(true)
+        expect(parseCliArgs(['--no-revolut'], {}, true).revolut).toBe(false)
+        expect(parseCliArgs([], { REVOLUT: 'true' }, true).revolut).toBe(true)
+        expect(parseCliArgs([], { REVOLUT: '1' }, true).revolut).toBe(true)
+        expect(parseCliArgs([], { REVOLUT: 'false' }, true).revolut).toBe(false)
+    })
+
     test('-h and --help set help to true', () => {
         expect(parseCliArgs(['-h'], {}, true).help).toBe(true)
         expect(parseCliArgs(['--help'], {}, true).help).toBe(true)

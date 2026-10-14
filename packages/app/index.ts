@@ -23,7 +23,9 @@ const userData: User = await lm.user.getMe()
 info(`Current user: %s | %s`, details(userData.name), details(userData.email))
 
 await processMoneyForward()
-await processRevolut()
+if (cliOptions.revolut) {
+    await processRevolut()
+}
 
 async function insertTransactionsBatch(
     transactions: InsertTransaction[],

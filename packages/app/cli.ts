@@ -6,6 +6,7 @@ export interface CliOptions {
     refresh: boolean
     headless: boolean
     rematch: boolean
+    revolut: boolean
     help: boolean
 }
 
@@ -23,6 +24,7 @@ Options:
   --headless               Run browser scraper headlessly (default: true)
   --no-headless, --headed  Run browser scraper with visible Chromium window
   --rematch                Force rematching of Lunch Money accounts
+  --revolut                Enable processing Revolut CSV transactions (default: false)
   -h, --help               Show this help message
 
 Environment variables (.env):
@@ -31,6 +33,7 @@ Environment variables (.env):
   REFRESH=true|false       Control refreshing Money Forward accounts (default: true)
   HEADLESS=true|false      Control browser scraper headless mode (default: true)
   REMATCH=true             Force rematching of accounts
+  REVOLUT=true|false       Enable processing Revolut transactions (default: false)
 `)
 }
 
@@ -52,6 +55,8 @@ export function parseCliArgs(
             'no-headless': { type: 'boolean' },
             headed: { type: 'boolean' },
             rematch: { type: 'boolean' },
+            revolut: { type: 'boolean' },
+            'no-revolut': { type: 'boolean' },
             help: { type: 'boolean', short: 'h' },
         },
         strict: false,
@@ -113,12 +118,23 @@ export function parseCliArgs(
         rematch = env.REMATCH === 'true' || env.REMATCH === '1'
     }
 
+    // Determine revolut preference (defaults to false)
+    let revolut = false
+    if (values['no-revolut']) {
+        revolut = false
+    } else if (values.revolut) {
+        revolut = true
+    } else if (env.REVOLUT !== undefined) {
+        revolut = env.REVOLUT === 'true' || env.REVOLUT === '1'
+    }
+
     return {
         nonInteractive,
         scrape,
         refresh,
         headless,
         rematch,
+        revolut,
         help,
     }
 }
