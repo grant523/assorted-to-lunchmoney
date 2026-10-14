@@ -89,6 +89,24 @@ async function processMoneyForward() {
     const mfTransactions = await loadMoneyForwardTransactions(18)
     info(`Loaded %s transactions`, details(mfTransactions.length))
 
+    let transferCategoryId: number | undefined
+    try {
+        const categories = await lm.categories.getAll()
+        const transferCategory =
+            categories.find(
+                (c) =>
+                    c.name.toLowerCase().includes('payment') &&
+                    c.name.toLowerCase().includes('transfer') &&
+                    c.exclude_from_budget
+            ) || categories.find((c) => c.name.toLowerCase().includes('transfer') && c.exclude_from_budget)
+        transferCategoryId = transferCategory?.id
+        if (transferCategoryId) {
+            info(`Resolved transfer category: ${details(transferCategory?.name)} (${details(transferCategoryId)})`)
+        }
+    } catch (e) {
+        warn(`Failed to fetch categories from Lunch Money: ${e}`)
+    }
+
     try {
         info(`Inserting transactions into Lunch Money...`)
 
@@ -98,6 +116,8 @@ async function processMoneyForward() {
 
         const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3400-\u4DBF\uFF65-\uFF9F]/
         const RAKUTEN_JCB_PREFIX_REGEX = /^JCB(?:国内利用\s*(?:JCB)?|海外利用)\s*/
+        const RAKUTEN_CARD_PAYMENT_REGEX = /ラクテンカ[-ー]ドサ[-ー]ビス|楽天カード/i
+        const rakutenCardLmId = mfNameToLmId.get('楽天カード')
 
         function cleanMerchantName(raw: string): string {
             if (!raw) return ''
@@ -170,6 +190,44 @@ async function processMoneyForward() {
                 unmappedInstitutions.add(t.institution)
                 continue
             }
+
+            // Check if this is a credit card payment from a bank account
+            const isRakutenCardPayment =
+                RAKUTEN_CARD_PAYMENT_REGEX.test(t.description) &&
+                t.institution !== '楽天カード' &&
+                (t.isTransfer || t.amount < 0)
+
+            if (isRakutenCardPayment) {
+                // Bank withdrawal side (positive in Lunch Money = debit/money spent)
+                lmTransactions.push({
+                    manual_account_id: manualAccountId,
+                    date: t.date.replace(/\//g, '-'),
+                    amount: Math.abs(t.amount),
+                    payee: 'Payment - Rakuten Card',
+                    original_name: t.description,
+                    notes: t.memo || undefined,
+                    category_id: transferCategoryId,
+                    external_id: t.id,
+                })
+
+                // Rakuten Card side (negative in Lunch Money = credit/payment received)
+                if (rakutenCardLmId !== undefined) {
+                    lmTransactions.push({
+                        manual_account_id: rakutenCardLmId,
+                        date: t.date.replace(/\//g, '-'),
+                        amount: -Math.abs(t.amount),
+                        payee: 'Payment - Rakuten Card',
+                        original_name: t.description,
+                        notes: t.memo || undefined,
+                        category_id: transferCategoryId,
+                        external_id: `${t.id}-card-payment`,
+                    })
+                } else {
+                    warn('Detected Rakuten Card payment %s but 楽天カード is not mapped', details(t.description))
+                }
+                continue
+            }
+
             const cleanedPayee = cleanMerchantName(t.description)
             const translatedPayee = await translateText(cleanedPayee)
             lmTransactions.push({
@@ -179,6 +237,7 @@ async function processMoneyForward() {
                 payee: translatedPayee.slice(0, 140),
                 original_name: t.description,
                 notes: t.memo || undefined,
+                category_id: t.isTransfer ? transferCategoryId : undefined,
                 external_id: t.id,
             })
         }

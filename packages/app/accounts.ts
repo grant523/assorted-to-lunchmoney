@@ -23,7 +23,7 @@ export async function saveAccounts(accounts: AccountStatus[]): Promise<void> {
     info(`Writing accounts to CSV...`)
     const accountsCsv = stringify(accounts, {
         header: true,
-        columns: ['mfId', 'name', 'type', 'status', 'lastUpdated', 'url', 'errorMessage'],
+        columns: ['mfId', 'name', 'type', 'status', 'lastUpdated', 'url', 'balance', 'errorMessage'],
     })
     await Bun.write(filepath, accountsCsv)
     info(`Wrote ${details(accounts.length)} accounts to ${details(filepath)}`)
@@ -53,6 +53,7 @@ export async function loadAccounts(): Promise<AccountStatus[]> {
             status: string
             lastUpdated: string
             url: string
+            balance?: string
             errorMessage?: string
         }>
 
@@ -63,6 +64,7 @@ export async function loadAccounts(): Promise<AccountStatus[]> {
             status: record.status as AccountStatus['status'],
             lastUpdated: record.lastUpdated,
             url: record.url,
+            balance: record.balance !== undefined && record.balance !== '' ? Number(record.balance) : undefined,
             errorMessage: record.errorMessage || undefined,
         }))
 
@@ -211,6 +213,35 @@ export async function syncMoneyForwardAccounts(options: SyncAccountsOptions = {}
     }
 
     matches = db.query('SELECT * FROM accounts WHERE integration = ?').all(MONEY_FORWARD_INTEGRATION) as Account[]
+
+    const currentLmAccounts = await lm.manualAccounts.getAll()
+    const lmAccountsMap = new Map(currentLmAccounts.map((a) => [a.id, a]))
+    const mfAccountsMap = new Map(mfAccounts.map((a) => [a.mfId, a]))
+
+    info('Syncing account balances with Money Forward...')
+    for (const match of matches) {
+        const lmAcc = lmAccountsMap.get(match.lm_id)
+        const mfAcc = mfAccountsMap.get(match.account_id)
+
+        if (!lmAcc || !mfAcc || mfAcc.balance === undefined) {
+            continue
+        }
+
+        const targetBalance = lmAcc.type === 'credit' ? Math.abs(mfAcc.balance) : mfAcc.balance
+        const currentBalance = parseFloat(lmAcc.balance)
+
+        if (currentBalance !== targetBalance) {
+            info(`Updating balance for ${details(lmAcc.name)}: ${details(currentBalance)} → ${details(targetBalance)}`)
+            try {
+                await lm.manualAccounts.update(match.lm_id, { balance: targetBalance })
+            } catch (e) {
+                warn(`Failed to update balance for ${details(lmAcc.name)}: ${e}`)
+            }
+        } else {
+            info(`Balance for ${details(lmAcc.name)} is already up to date: ${details(currentBalance)}`)
+        }
+    }
+
     return matches
 }
 

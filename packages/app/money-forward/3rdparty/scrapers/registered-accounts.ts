@@ -16,6 +16,7 @@ export interface AccountStatus {
     status: 'ok' | 'error' | 'updating' | 'unknown'
     lastUpdated: string
     url: string
+    balance?: number
     errorMessage?: string
 }
 
@@ -51,10 +52,12 @@ export async function getRegisteredAccounts(page: Page): Promise<RegisteredAccou
                     .nth(0)
                     .textContent({ timeout: 1000 })
                     .catch(() => '')
-                const _assetsText = await cells
+                const assetsText = await cells
                     .nth(1)
                     .textContent({ timeout: 1000 })
                     .catch(() => '0')
+                const cleanAssets = (assetsText || '0').replace(/[,円\s]/g, '')
+                const balance = parseInt(cleanAssets, 10) || 0
                 const dateText = await cells
                     .nth(2)
                     .textContent({ timeout: 1000 })
@@ -127,6 +130,7 @@ export async function getRegisteredAccounts(page: Page): Promise<RegisteredAccou
                         status,
                         lastUpdated,
                         url: url || '',
+                        balance,
                         errorMessage,
                     })
                 }

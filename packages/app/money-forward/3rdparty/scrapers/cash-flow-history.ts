@@ -117,7 +117,8 @@ async function scrapeTransactionRows(page: Page): Promise<ScrapedTransactionRow[
             const description = tr.querySelector('td.content span')?.textContent?.trim() || ''
             const amountText = tr.querySelector('td.amount span.offset')?.textContent?.trim() || '0'
             const amount = parseInt(amountText.replace(/,/g, ''), 10)
-            const institution = tr.querySelector('td.note.calc')?.textContent?.trim() || ''
+            const institution =
+                (tr.querySelector('td.note.calc') || tr.querySelector('td.note'))?.textContent?.trim() || ''
             const category = tr.querySelector('td.lctg a.v_l_ctg')?.textContent?.trim() || ''
             const subcategory = tr.querySelector('td.mctg a.v_m_ctg')?.textContent?.trim() || ''
             const memo = tr.querySelector('td.memo span')?.textContent?.trim() || ''
