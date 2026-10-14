@@ -71,8 +71,12 @@ async function processMoneyForward() {
     }
 
     if (shouldScrape) {
-        info(`Scraping from Money Forward (headless: %s)...`, details(cliOptions.headless))
-        await scrape({ headless: cliOptions.headless })
+        info(
+            `Scraping from Money Forward (headless: %s, refresh: %s)...`,
+            details(cliOptions.headless),
+            details(cliOptions.refresh)
+        )
+        await scrape({ headless: cliOptions.headless, refresh: cliOptions.refresh })
     }
 
     info(`Syncing Money Forward accounts`)

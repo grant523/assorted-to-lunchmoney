@@ -3,6 +3,7 @@
     "private": "true",
     "scripts": {
         "start": "bun run --cwd=packages/app index.ts",
+        "refresh": "bun run --cwd=packages/app refresh.ts",
         "lint": "biome check --write --unsafe"
     },
     "module": "index.ts",

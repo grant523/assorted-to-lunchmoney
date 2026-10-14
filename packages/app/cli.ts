@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util'
 export interface CliOptions {
     nonInteractive: boolean
     scrape?: boolean
+    refresh: boolean
     headless: boolean
     rematch: boolean
     help: boolean
@@ -17,6 +18,8 @@ Options:
   --interactive            Force interactive prompts even when running in non-TTY environments
   --scrape                 Force scraping updates from Money Forward
   --no-scrape              Skip scraping Money Forward updates
+  --refresh                Refresh linked accounts on Money Forward before scraping (default: true)
+  --no-refresh             Skip refreshing linked accounts on Money Forward before scraping
   --headless               Run browser scraper headlessly (default: true)
   --no-headless, --headed  Run browser scraper with visible Chromium window
   --rematch                Force rematching of Lunch Money accounts
@@ -25,6 +28,7 @@ Options:
 Environment variables (.env):
   NON_INTERACTIVE=true     Run unattended without interactive prompts
   SCRAPE=true|false        Control scraping Money Forward updates
+  REFRESH=true|false       Control refreshing Money Forward accounts (default: true)
   HEADLESS=true|false      Control browser scraper headless mode (default: true)
   REMATCH=true             Force rematching of accounts
 `)
@@ -42,6 +46,8 @@ export function parseCliArgs(
             interactive: { type: 'boolean' },
             scrape: { type: 'boolean' },
             'no-scrape': { type: 'boolean' },
+            refresh: { type: 'boolean' },
+            'no-refresh': { type: 'boolean' },
             headless: { type: 'boolean' },
             'no-headless': { type: 'boolean' },
             headed: { type: 'boolean' },
@@ -79,6 +85,16 @@ export function parseCliArgs(
         scrape = undefined // prompt user
     }
 
+    // Determine refresh preference (defaults to true)
+    let refresh = true
+    if (values['no-refresh']) {
+        refresh = false
+    } else if (values.refresh) {
+        refresh = true
+    } else if (env.REFRESH !== undefined) {
+        refresh = env.REFRESH !== 'false' && env.REFRESH !== '0'
+    }
+
     // Determine headless preference (defaults to true)
     let headless = true
     if (values['no-headless'] || values.headed) {
@@ -100,6 +116,7 @@ export function parseCliArgs(
     return {
         nonInteractive,
         scrape,
+        refresh,
         headless,
         rematch,
         help,

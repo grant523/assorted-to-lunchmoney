@@ -72,6 +72,15 @@ describe('parseCliArgs', () => {
         expect(parseCliArgs([], { REMATCH: 'true' }, true).rematch).toBe(true)
     })
 
+    test('refresh is true by default and can be overridden with --no-refresh or REFRESH=false', () => {
+        expect(parseCliArgs([], {}, true).refresh).toBe(true)
+        expect(parseCliArgs(['--refresh'], {}, true).refresh).toBe(true)
+        expect(parseCliArgs(['--no-refresh'], {}, true).refresh).toBe(false)
+        expect(parseCliArgs([], { REFRESH: 'false' }, true).refresh).toBe(false)
+        expect(parseCliArgs([], { REFRESH: '0' }, true).refresh).toBe(false)
+        expect(parseCliArgs([], { REFRESH: 'true' }, true).refresh).toBe(true)
+    })
+
     test('-h and --help set help to true', () => {
         expect(parseCliArgs(['-h'], {}, true).help).toBe(true)
         expect(parseCliArgs(['--help'], {}, true).help).toBe(true)

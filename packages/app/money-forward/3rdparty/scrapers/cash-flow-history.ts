@@ -1,5 +1,6 @@
 // https://github.com/hiroppy/mf-dashboard/blob/3e5ad1277055c87a76d7e69efe2fd7bd61b9165b/apps/crawler/src/scrapers/cash-flow-history.ts
 // biome-ignore-all lint/style/noNonNullAssertion: 3rd party code
+// biome-ignore-all lint/suspicious/noExplicitAny: 3rd party code
 
 import { details, info, warn } from '@repo/logger'
 import { stringify } from 'csv-stringify/sync'
@@ -105,7 +106,6 @@ async function detectMonth(page: Page): Promise<{ year: number; month: number }>
  * #cf-detail-table の各行を取引データとして読み取る
  */
 async function scrapeTransactionRows(page: Page): Promise<ScrapedTransactionRow[]> {
-    // biome-ignore lint/suspicious/noExplicitAny: runs in browser context, no types
     return page.locator('#cf-detail-table').evaluate((table: any) => {
         const rows = Array.from(table.querySelectorAll('tr.transaction_list'))
         return rows.map((tr: any) => {
