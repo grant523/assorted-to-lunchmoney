@@ -227,7 +227,15 @@ export async function syncMoneyForwardAccounts(options: SyncAccountsOptions = {}
             continue
         }
 
-        const targetBalance = lmAcc.type === 'credit' ? Math.abs(mfAcc.balance) : mfAcc.balance
+        // Skip credit cards: Money Forward only reports next statement balance (scheduled withdrawal)
+        // rather than total real-time liability including unbilled charges. Lunch Money maintains
+        // the accurate real-time balance via transactions and payment transfers.
+        if (lmAcc.type === 'credit') {
+            info(`Skipping balance overwrite for credit account ${details(lmAcc.name)} (tracked via transactions)`)
+            continue
+        }
+
+        const targetBalance = mfAcc.balance
         const currentBalance = parseFloat(lmAcc.balance)
 
         if (currentBalance !== targetBalance) {
